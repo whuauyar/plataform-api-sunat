@@ -1,4 +1,3 @@
-'use strict';
 /*
  * Ejecuta coleccion.postman_collection.json con Newman y emite una línea "QA|{json}"
  * por request, para leer el resultado desde los logs de Railway.
@@ -9,9 +8,11 @@
  *  - captura de api_key/api_secret e IDs creados ({{id_factura}}, {{id_boleta}}...)
  * y se omite DELETE /empresa (borraría la empresa a mitad de la corrida).
  */
-const fs = require('fs');
-const { execSync } = require('child_process');
-const newman = (() => { try { return require('newman'); } catch (e) { return require('/usr/local/lib/node_modules/newman'); } })();
+import { Buffer } from 'node:buffer';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import process from 'node:process';
+import newman from 'newman';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8000/api/v1';
 const DELAY_MS = Number(process.env.DELAY_MS || 300);
@@ -38,7 +39,7 @@ fs.writeFileSync(LOGO, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ
 const TXT = '/tmp/propuesta.txt';
 fs.writeFileSync(TXT, 'QA|prueba\n');
 
-const col = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'coleccion.postman_collection.json'), 'utf8'));
+const col = JSON.parse(fs.readFileSync(new URL('./coleccion.postman_collection.json', import.meta.url), 'utf8'));
 const omitidos = [];
 
 function patch(items, ruta) {
@@ -97,7 +98,13 @@ newman.run({ collection: col, delayRequest: DELAY_MS, timeoutRequest: 90000, rep
   .on('request', (err, a) => {
     const res = a.response;
     let cuerpo = '';
-    if (res) { try { cuerpo = res.stream.toString('utf8'); } catch (e) {} }
+    if (res) {
+      try {
+        cuerpo = res.stream.toString('utf8');
+      } catch {
+        cuerpo = '[cuerpo no legible como texto]';
+      }
+    }
     const ct = res && res.headers.get('Content-Type') || '';
     out({
       tipo: 'req',

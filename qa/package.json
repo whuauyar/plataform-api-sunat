@@ -1,0 +1,9 @@
+{
+    "name": "qa-newman-runner",
+    "private": true,
+    "type": "module",
+    "description": "Ejecuta la colección Postman contra la API desplegada en Railway",
+    "dependencies": {
+        "newman": "^6.2.1"
+    }
+}
