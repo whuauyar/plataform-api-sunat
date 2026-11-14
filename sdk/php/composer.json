@@ -1,0 +1,16 @@
+{
+    "name": "jorge-chavez/api-sunat-sdk",
+    "description": "SDK PHP para la API Jorge Chavez API SUNAT (facturación electrónica).",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.1",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "JorgeChavez\\ApiSunat\\": "src/"
+        }
+    }
+}

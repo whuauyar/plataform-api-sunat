@@ -1,0 +1,57 @@
+/.phpunit.cache
+/bootstrap/ssr
+/node_modules
+/public/build
+/public/build.zip
+/public/hot
+/public/storage
+/storage/*.key
+railway.env.txt
+.claude/
+/storage/certificates/
+!/storage/certificates/.gitkeep
+!/storage/certificates/.gitignore
+/storage/pail
+/resources/js/actions
+/resources/js/routes
+/resources/js/wayfinder
+/vendor
+.DS_Store
+.env
+.env.backup
+.env.*.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/auth.json
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+greenter-documentacion/
+
+# Material de referencia GRE/SUNAT (manuales, XSD, XMLs de ejemplo y credenciales
+# de prueba/producción) — NO debe subirse al remoto.
+guia-trasportista/
+MANUAL PARA GUIAS DE REMISION REMITENTE Y TRASNPORTISTA/
+
+# Deployment scripts (Demo)
+sync_to_demo.bat
+
+
+# Build de release (empaquetado de venta) y herramientas de ofuscacion
+/dist
+/tools
+
+# Documentos internos de seguridad (NO se suben al remoto)
+SEGURIDAD-REPO.md
+
+# Lanzadores del scheduler generados por instalar-local.bat (rutas locales)
+/scripts/win/scheduler-run.cmd
+/scripts/win/scheduler-run.vbs
+.env.bak

@@ -1,0 +1,231 @@
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { type ColumnDef } from '@tanstack/react-table';
+import { ListOrdered, Pencil, Power, Trash2 } from '@/lib/icons';
+import AppLayout from '@/layouts/app-layout';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Combobox } from '@/components/ui/combobox';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableRowActions } from '@/components/ui/data-table-row-actions';
+import { Pagination } from '@/components/ui/pagination';
+import { usePermissions } from '@/hooks/use-permissions';
+import type { BreadcrumbItem } from '@/types';
+
+type Serie = {
+    id: number;
+    tipo_documento: string;
+    tipo_nombre: string;
+    serie: string;
+    correlativo: number;
+    sucursal_nombre: string | null;
+    is_active: boolean;
+    tenant: { id: number; ruc: string; razon_social: string };
+};
+
+type Empresa = { id: number; ruc: string; razon_social: string };
+
+type Paginacion<T> = {
+    data: T[];
+    last_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+    links: { url: string | null; label: string; active: boolean }[];
+};
+
+type Props = {
+    series: Paginacion<Serie>;
+    empresas: Empresa[];
+    tipos: Record<string, string>;
+    filtros: { buscar: string; tenant_id: string; tipo_documento: string };
+};
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Administración', href: '#' },
+    { title: 'Series', href: '/admin/series' },
+];
+
+export default function SeriesTodas({ series, empresas, tipos, filtros }: Props) {
+    const confirm = useConfirm();
+    const perms = usePermissions();
+    const { data, setData, get, processing } = useForm({
+        buscar: filtros.buscar || '',
+        tenant_id: filtros.tenant_id || '',
+        tipo_documento: filtros.tipo_documento || '',
+    });
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        get('/admin/series', { preserveState: true, preserveScroll: true });
+    };
+
+    const toggle = (s: Serie) =>
+        router.post(`/admin/empresas/${s.tenant.id}/series/${s.id}/toggle`, {}, { preserveScroll: true });
+
+    const eliminar = async (s: Serie) => {
+        if (
+            await confirm({
+                title: `¿Eliminar serie ${s.serie}?`,
+                description: `${s.tenant.razon_social} · esto no borra los documentos ya emitidos.`,
+                variant: 'danger',
+                confirmText: 'Eliminar',
+            })
+        ) {
+            router.delete(`/admin/empresas/${s.tenant.id}/series/${s.id}`, { preserveScroll: true });
+        }
+    };
+
+    const columns: ColumnDef<Serie>[] = [
+        {
+            accessorKey: 'serie',
+            header: 'Serie',
+            meta: { label: 'Serie', primary: true },
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2">
+                    <span className="font-mono font-semibold">{row.original.serie}</span>
+                    <span className="text-muted-foreground text-xs uppercase">
+                        {row.original.tipo_nombre} ({row.original.tipo_documento})
+                    </span>
+                </div>
+            ),
+        },
+        {
+            id: 'empresa',
+            header: 'Empresa',
+            meta: { label: 'Empresa' },
+            cell: ({ row }) => (
+                <Link href={`/admin/empresas/${row.original.tenant.id}`} className="text-primary hover:underline">
+                    <div className="font-medium">{row.original.tenant.razon_social}</div>
+                    <div className="text-muted-foreground font-mono text-xs">{row.original.tenant.ruc}</div>
+                </Link>
+            ),
+        },
+        {
+            accessorKey: 'correlativo',
+            header: 'Correlativo',
+            meta: { label: 'Correlativo' },
+            cell: ({ row }) => (
+                <span className="font-mono">{String(row.original.correlativo).padStart(8, '0')}</span>
+            ),
+        },
+        {
+            accessorKey: 'is_active',
+            header: 'Estado',
+            meta: { label: 'Estado' },
+            cell: ({ row }) =>
+                row.original.is_active ? (
+                    <Badge className="border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        Activa
+                    </Badge>
+                ) : (
+                    <Badge variant="secondary">Inactiva</Badge>
+                ),
+        },
+        {
+            id: 'actions',
+            header: '',
+            enableSorting: false,
+            meta: { hideLabel: true, alignRight: true },
+            cell: ({ row }) => {
+                const s = row.original;
+                return (
+                    <DataTableRowActions
+                        actions={[
+                            ...(perms.canWrite
+                                ? [
+                                      {
+                                          label: 'Editar',
+                                          icon: Pencil,
+                                          onSelect: () =>
+                                              router.visit(`/admin/empresas/${s.tenant.id}/series/${s.id}/editar`),
+                                      },
+                                      {
+                                          label: s.is_active ? 'Desactivar' : 'Activar',
+                                          icon: Power,
+                                          onSelect: () => toggle(s),
+                                      },
+                                  ]
+                                : []),
+                            ...(perms.canDelete
+                                ? [{
+                                      label: 'Eliminar',
+                                      icon: Trash2,
+                                      danger: true,
+                                      separatorBefore: true,
+                                      onSelect: () => eliminar(s),
+                                  }]
+                                : []),
+                        ]}
+                    />
+                );
+            },
+        },
+    ];
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Series" />
+
+            <div className="flex flex-1 flex-col gap-6 p-4">
+                <div className="flex items-center gap-3">
+                    <div className="text-primary flex size-10 items-center justify-center rounded-lg">
+                        <ListOrdered className="size-5" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-semibold tracking-tight">Series</h1>
+                        <p className="text-muted-foreground text-sm">
+                            {series.total} {series.total === 1 ? 'serie' : 'series'} en total
+                        </p>
+                    </div>
+                </div>
+
+                <Card className="p-4">
+                    <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <Combobox
+                            value={data.tenant_id}
+                            onChange={(v) => setData('tenant_id', v)}
+                            options={[
+                                { value: '', label: 'Todas las empresas' },
+                                ...empresas.map((emp) => ({ value: String(emp.id), label: `${emp.ruc} - ${emp.razon_social}` })),
+                            ]}
+                            placeholder="Todas las empresas"
+                            searchable
+                            className="sm:max-w-xs"
+                        />
+                        <Combobox
+                            value={data.tipo_documento}
+                            onChange={(v) => setData('tipo_documento', v)}
+                            options={[
+                                { value: '', label: 'Todos los tipos' },
+                                ...Object.entries(tipos).map(([codigo, nombre]) => ({ value: codigo, label: `${codigo} - ${nombre}` })),
+                            ]}
+                            placeholder="Todos los tipos"
+                            className="sm:max-w-[200px]"
+                        />
+                        <Button type="submit" variant="secondary" disabled={processing}>
+                            Filtrar
+                        </Button>
+                        {data.tenant_id && perms.canWrite && (
+                            <Button asChild className="sm:ml-auto">
+                                <Link href={`/admin/empresas/${data.tenant_id}/series/nueva`}>Nueva serie</Link>
+                            </Button>
+                        )}
+                    </form>
+                </Card>
+
+                <DataTable
+                    columns={columns}
+                    data={series.data}
+                    indexOffset={(series.from ?? 1) - 1}
+                    manualPagination
+                    searchPlaceholder="Buscar por serie..."
+                    emptyMessage="No hay series que coincidan."
+                />
+
+                <Pagination links={series.links} from={series.from} to={series.to} total={series.total} />
+            </div>
+        </AppLayout>
+    );
+}

@@ -1,0 +1,315 @@
+<?php
+
+use App\Http\Controllers\Auth\SaasAuthController;
+use App\Http\Controllers\Web\Sunat\AnulacionController;
+use App\Http\Controllers\Web\Sunat\BoletaController;
+use App\Http\Controllers\Web\Sunat\BuscarClienteController;
+use App\Http\Controllers\Web\Sunat\ClienteController;
+use App\Http\Controllers\Web\Sunat\ConfiguracionController;
+use App\Http\Controllers\Web\Sunat\ConsultaCpeController;
+use App\Http\Controllers\Web\Sunat\CotizacionController;
+use App\Http\Controllers\Web\Sunat\DashboardController;
+use App\Http\Controllers\Web\Sunat\EmpresaActivaController;
+use App\Http\Controllers\Web\Sunat\EquipoController;
+use App\Http\Controllers\Web\Sunat\ExportarController;
+use App\Http\Controllers\Web\Sunat\FacturaController;
+use App\Http\Controllers\Web\Sunat\GuiaController;
+use App\Http\Controllers\Web\Sunat\HistorialController;
+use App\Http\Controllers\Web\Sunat\MiApiKeyController;
+use App\Http\Controllers\Web\Sunat\NotaCreditoController;
+use App\Http\Controllers\Web\Sunat\NotaDebitoController;
+use App\Http\Controllers\Web\Sunat\NotaVentaController;
+use App\Http\Controllers\Web\Sunat\PercepcionController;
+use App\Http\Controllers\Web\Sunat\ReporteController;
+use App\Http\Controllers\Web\Sunat\ResumenController;
+use App\Http\Controllers\Web\Sunat\RetencionController;
+use App\Http\Controllers\Web\Sunat\ReversionController;
+use App\Http\Controllers\Web\Sunat\SerieController;
+use App\Http\Controllers\Web\Sunat\SireController;
+use App\Http\Controllers\Web\Sunat\SucursalController;
+use Illuminate\Support\Facades\Route;
+
+// ── Home root ───────────────────────────────────────────────────────────────
+// La detección es por Accept:
+//   · Cliente acepta HTML (navegador)  → dashboard/login/register según estado
+//   · Cliente NO acepta HTML (curl/API) → JSON con status de la API
+//
+// Se usa `Accept: text/html` en vez de `wantsJson()` porque proxies (nginx,
+// cloudflare, cdn) a veces reescriben Accept y disparaban wantsJson()=true
+// en navegadores reales, mostrando JSON en la raíz.
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    $aceptaHtml = str_contains((string) $request->header('Accept', ''), 'text/html');
+
+    if ($aceptaHtml) {
+        if ($request->user()) {
+            return redirect()->route('dashboard');
+        }
+
+        if (! \App\Models\User::query()->exists()) {
+            return redirect('/register');
+        }
+
+        return redirect()->route('login');
+    }
+
+    return response()->json([
+        'api' => 'SUNAT API',
+        'version' => 'v1',
+        'status' => 'ok',
+        'docs' => url('/api/v1'),
+    ]);
+})->name('home');
+
+// ── Styleguide (sistema visual institucional) ───────────────────────────────
+// Muestra todos los componentes juntos para validar la identidad de un vistazo.
+Route::get('/styleguide', fn () => \Inertia\Inertia::render('styleguide'))->name('styleguide');
+
+// ── Auth Bridge (entrada desde el SaaS principal) ───────────────────────────
+// El SaaS principal genera un token con POST /api/bridge/auth y redirige
+// al usuario a esta URL con el token firmado.
+Route::get('/auth/from-saas', [SaasAuthController::class, 'login'])->name('auth.from-saas');
+
+// ── Módulo SUNAT (requiere autenticación) ────────────────────────────────────
+// SEGURIDAD: se eliminaron las rutas públicas de mantenimiento /limpiar-cache-ahora
+// y /ver-errores. Exponían acciones del sistema y el log de la aplicación SIN
+// autenticación (fuga de información y DoS). Para limpiar caché usar
+// `php artisan optimize:clear`; para diagnóstico usar `php artisan kodevo:doctor`.
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
+
+    // /sunat → redirect inteligente (configuracion si no tiene SOL, facturas si ya tiene)
+    Route::prefix('sunat')->name('sunat.')->group(function () {
+        Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
+        // Cambiar la empresa activa (super admin: cualquiera; resto: sus membresías).
+        Route::put('/empresa-activa', [EmpresaActivaController::class, 'update'])->name('empresa-activa.update');
+
+        Route::get('/configuracion', [ConfiguracionController::class, 'edit'])->name('configuracion');
+        Route::put('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');
+        Route::post('/configuracion/probar', [ConfiguracionController::class, 'probarConexion'])->name('configuracion.probar');
+        Route::put('/configuracion/consulta-token', [ConfiguracionController::class, 'updateConsultaToken'])->name('configuracion.consulta-token');
+
+        Route::get('/facturas', [FacturaController::class, 'index'])->name('facturas.index');
+        Route::get('/facturas/nueva', [FacturaController::class, 'create'])->name('facturas.create');
+        Route::post('/facturas', [FacturaController::class, 'store'])->name('facturas.store');
+
+        Route::get('/boletas', [BoletaController::class, 'index'])->name('boletas.index');
+        Route::get('/boletas/nueva', [BoletaController::class, 'create'])->name('boletas.create');
+        Route::post('/boletas', [BoletaController::class, 'store'])->name('boletas.store');
+
+        // PDF por formato (a4/a5/ticket-80/ticket-58) para la vista previa en modal.
+        Route::get('/documentos/{tipo}/{id}/pdf', [\App\Http\Controllers\Web\Sunat\DocumentoPdfController::class, 'show'])->name('documentos.pdf');
+
+        Route::get('/historial', [HistorialController::class, 'index'])->name('historial');
+        Route::get('/historial/{tipo}/{id}/pdf', [HistorialController::class, 'pdf'])->name('historial.pdf');
+        Route::get('/historial/{tipo}/{id}/xml', [HistorialController::class, 'xml'])->name('historial.xml');
+        Route::get('/historial/{tipo}/{id}/cdr', [HistorialController::class, 'cdr'])->name('historial.cdr');
+        Route::get('/historial/{tipo}/{id}/respuesta', [HistorialController::class, 'respuesta'])->name('historial.respuesta');
+        // Editar + reenviar un comprobante rechazado/pendiente (factura/boleta)
+        Route::get('/comprobantes/{tipo}/{id}/editar', [FacturaController::class, 'edit'])->whereIn('tipo', ['01', '03'])->name('comprobantes.editar');
+        Route::post('/comprobantes/{tipo}/{id}/actualizar', [FacturaController::class, 'update'])->whereIn('tipo', ['01', '03'])->name('comprobantes.actualizar');
+        Route::post('/historial/{tipo}/{id}/reenviar', [HistorialController::class, 'reenviar'])->name('historial.reenviar');
+        Route::post('/historial/{tipo}/{id}/anular', [HistorialController::class, 'anular'])->name('historial.anular');
+        Route::get('/historial/{tipo}/{id}/anulacion/{archivo}', [HistorialController::class, 'descargarAnulacion'])->whereIn('archivo', ['xml', 'cdr'])->name('historial.anulacion');
+
+        Route::get('/nota-credito', [NotaCreditoController::class, 'index'])->name('nota-credito.index');
+        Route::get('/nota-credito/nueva', [NotaCreditoController::class, 'create'])->name('nota-credito.create');
+        Route::post('/nota-credito', [NotaCreditoController::class, 'store'])->name('nota-credito.store');
+        Route::get('/nota-credito/{id}/editar', [NotaCreditoController::class, 'edit'])->name('nota-credito.editar');
+        Route::post('/nota-credito/{id}/actualizar', [NotaCreditoController::class, 'update'])->name('nota-credito.actualizar');
+
+        Route::get('/nota-debito', [NotaDebitoController::class, 'index'])->name('nota-debito.index');
+        Route::get('/nota-debito/nueva', [NotaDebitoController::class, 'create'])->name('nota-debito.create');
+        Route::post('/nota-debito', [NotaDebitoController::class, 'store'])->name('nota-debito.store');
+        Route::get('/nota-debito/{id}/editar', [NotaDebitoController::class, 'edit'])->name('nota-debito.editar');
+        Route::post('/nota-debito/{id}/actualizar', [NotaDebitoController::class, 'update'])->name('nota-debito.actualizar');
+
+        Route::get('/anulaciones/nueva', [AnulacionController::class, 'create'])->name('anulaciones.create');
+        Route::post('/anulaciones', [AnulacionController::class, 'store'])->name('anulaciones.store');
+
+        Route::get('/resumenes', [ResumenController::class, 'index'])->name('resumenes.index');
+        Route::get('/resumenes/nueva', [ResumenController::class, 'create'])->name('resumenes.create');
+        Route::post('/resumenes', [ResumenController::class, 'store'])->name('resumenes.store');
+        Route::post('/resumenes/{id}/refrescar', [ResumenController::class, 'refrescar'])->name('resumenes.refrescar');
+        Route::get('/resumenes/{id}/{archivo}', [ResumenController::class, 'descargar'])->whereIn('archivo', ['xml', 'cdr'])->name('resumenes.descargar');
+
+        Route::get('/guias', [GuiaController::class, 'index'])->name('guias.index');
+        Route::get('/guias/nueva', [GuiaController::class, 'create'])->name('guias.create');
+        Route::post('/guias', [GuiaController::class, 'store'])->name('guias.store');
+        Route::get('/guias/{id}/editar', [GuiaController::class, 'edit'])->name('guias.editar');
+        Route::post('/guias/{id}/actualizar', [GuiaController::class, 'update'])->name('guias.actualizar');
+
+        Route::get('/retenciones/nueva', [RetencionController::class, 'create'])->name('retenciones.create');
+        Route::post('/retenciones', [RetencionController::class, 'store'])->name('retenciones.store');
+
+        Route::get('/percepciones/nueva', [PercepcionController::class, 'create'])->name('percepciones.create');
+        Route::post('/percepciones', [PercepcionController::class, 'store'])->name('percepciones.store');
+
+        Route::get('/reversiones/nueva', [ReversionController::class, 'create'])->name('reversiones.create');
+        Route::post('/reversiones', [ReversionController::class, 'store'])->name('reversiones.store');
+
+        Route::get('/nota-venta', [NotaVentaController::class, 'index'])->name('nota-venta.index');
+        Route::get('/nota-venta/nueva', [NotaVentaController::class, 'create'])->name('nota-venta.create');
+        Route::post('/nota-venta', [NotaVentaController::class, 'store'])->name('nota-venta.store');
+
+        Route::get('/cotizaciones', [CotizacionController::class, 'index'])->name('cotizaciones');
+        Route::get('/cotizaciones/nueva', [CotizacionController::class, 'create'])->name('cotizaciones.create');
+        Route::post('/cotizaciones', [CotizacionController::class, 'store'])->name('cotizaciones.store');
+        Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado'])->name('cotizaciones.estado');
+        Route::post('/cotizaciones/{id}/convertir', [CotizacionController::class, 'convertir'])->name('cotizaciones.convertir');
+        Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy'])->name('cotizaciones.destroy');
+
+        Route::get('/clientes', [ClienteController::class, 'index'])->name('clientes');
+        Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
+        Route::put('/clientes/{id}', [ClienteController::class, 'update'])->name('clientes.update');
+        Route::delete('/clientes/{id}', [ClienteController::class, 'destroy'])->name('clientes.destroy');
+        Route::get('/buscar-ruc', [ClienteController::class, 'lookupRuc'])->name('clientes.buscar-ruc');
+
+        Route::get('/buscar-cliente', [BuscarClienteController::class, 'buscar'])->name('buscar-cliente');
+        Route::get('/buscar-documento', [BuscarClienteController::class, 'buscarDocumento'])->name('buscar-documento');
+
+        // Ubigeos dependientes (región → provincia → distrito) para el panel
+        Route::get('/ubigeo/regiones', [\App\Http\Controllers\Api\V1\UbigeoController::class, 'regiones'])->name('ubigeo.regiones');
+        Route::get('/ubigeo/provincias', [\App\Http\Controllers\Api\V1\UbigeoController::class, 'provincias'])->name('ubigeo.provincias');
+        Route::get('/ubigeo/distritos', [\App\Http\Controllers\Api\V1\UbigeoController::class, 'distritos'])->name('ubigeo.distritos');
+
+        Route::get('/mi-api-key', [MiApiKeyController::class, 'show'])->name('mi-api-key');
+
+        // Fase 4 — series, consultas, exportar y reportes (empresa activa)
+        Route::get('/series', [SerieController::class, 'index'])->name('series');
+        Route::post('/series', [SerieController::class, 'store'])->name('series.store');
+        Route::put('/series/{serie}', [SerieController::class, 'update'])->name('series.update');
+        Route::post('/series/{serie}/toggle', [SerieController::class, 'toggle'])->name('series.toggle');
+        Route::delete('/series/{serie}', [SerieController::class, 'destroy'])->name('series.destroy');
+
+        // Sucursales / establecimientos anexos (empresa activa)
+        Route::get('/sucursales', [SucursalController::class, 'index'])->name('sucursales');
+        Route::post('/sucursales', [SucursalController::class, 'store'])->name('sucursales.store');
+        Route::put('/sucursales/{sucursal}', [SucursalController::class, 'update'])->name('sucursales.update');
+        Route::post('/sucursales/{sucursal}/toggle', [SucursalController::class, 'toggle'])->name('sucursales.toggle');
+        Route::delete('/sucursales/{sucursal}', [SucursalController::class, 'destroy'])->name('sucursales.destroy');
+
+        Route::get('/consulta-cpe', [ConsultaCpeController::class, 'create'])->name('consulta-cpe');
+        Route::get('/consulta-cpe/buscar', [ConsultaCpeController::class, 'consultar'])->name('consulta-cpe.consultar');
+
+        Route::get('/exportar', [ExportarController::class, 'index'])->name('exportar');
+        Route::get('/exportar/descargar', [ExportarController::class, 'download'])->name('exportar.descargar');
+
+        Route::get('/reportes', [ReporteController::class, 'index'])->name('reportes');
+        Route::get('/reportes/registro-ventas', [ReporteController::class, 'registroVentas'])->name('reportes.registro-ventas');
+
+        // Fase 5 — SIRE (RCE)
+        Route::get('/sire', [SireController::class, 'index'])->name('sire');
+        Route::post('/sire/activar', [SireController::class, 'activar'])->name('sire.activar');
+        Route::post('/sire/desactivar', [SireController::class, 'desactivar'])->name('sire.desactivar');
+        Route::get('/sire/periodos', [SireController::class, 'periodos'])->name('sire.periodos');
+        Route::post('/sire/propuesta', [SireController::class, 'propuesta'])->name('sire.propuesta');
+        Route::post('/sire/aceptar', [SireController::class, 'aceptarPropuesta'])->name('sire.aceptar');
+        Route::post('/sire/preliminar', [SireController::class, 'registrarPreliminar'])->name('sire.preliminar');
+        Route::post('/sire/reconciliar', [SireController::class, 'reconciliar'])->name('sire.reconciliar');
+        Route::get('/sire/tickets', [SireController::class, 'tickets'])->name('sire.tickets');
+        Route::post('/sire/tickets/{numTicket}/refrescar', [SireController::class, 'refrescarTicket'])->name('sire.tickets.refrescar');
+        Route::get('/sire/tickets/{numTicket}/archivo', [SireController::class, 'descargarTicket'])->name('sire.tickets.archivo');
+
+        // Mi equipo — el dueño gestiona los cajeros de su empresa (super admin también).
+        Route::get('/equipo', [EquipoController::class, 'index'])->name('equipo');
+        Route::post('/equipo', [EquipoController::class, 'store'])->name('equipo.store');
+        Route::put('/equipo/{usuario}', [EquipoController::class, 'update'])->name('equipo.update');
+        Route::post('/equipo/{usuario}/reset-password', [EquipoController::class, 'resetPassword'])->name('equipo.reset-password');
+        Route::post('/equipo/{usuario}/toggle', [EquipoController::class, 'toggle'])->name('equipo.toggle');
+        Route::delete('/equipo/{usuario}', [EquipoController::class, 'destroy'])->name('equipo.destroy');
+    });
+});
+
+// ── Panel de Administración ─────────────────────────────────────────────────
+Route::middleware(['auth', 'admin', 'panel.write'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        // Empresas (Tenants)
+        Route::get('empresas', [\App\Http\Controllers\Admin\TenantController::class, 'index'])->name('empresas.index');
+        Route::get('empresas/nueva', [\App\Http\Controllers\Admin\TenantController::class, 'create'])->name('empresas.create');
+        Route::post('empresas', [\App\Http\Controllers\Admin\TenantController::class, 'store'])->name('empresas.store');
+        Route::get('empresas/{tenant}', [\App\Http\Controllers\Admin\TenantController::class, 'show'])->name('empresas.show');
+        Route::get('empresas/{tenant}/editar', [\App\Http\Controllers\Admin\TenantController::class, 'edit'])->name('empresas.edit');
+        Route::put('empresas/{tenant}', [\App\Http\Controllers\Admin\TenantController::class, 'update'])->name('empresas.update');
+        Route::delete('empresas/{tenant}', [\App\Http\Controllers\Admin\TenantController::class, 'destroy'])->name('empresas.destroy');
+        Route::post('empresas/{tenant}/toggle', [\App\Http\Controllers\Admin\TenantController::class, 'toggle'])->name('empresas.toggle');
+        Route::post('empresas/{tenant}/regenerar-credenciales', [\App\Http\Controllers\Admin\TenantController::class, 'regenerarCredenciales'])->name('empresas.regenerar');
+
+        // Sucursales anidadas por empresa
+        Route::get('empresas/{tenant}/sucursales', [\App\Http\Controllers\Admin\SucursalController::class, 'index'])->name('sucursales.index');
+        Route::get('empresas/{tenant}/sucursales/nueva', [\App\Http\Controllers\Admin\SucursalController::class, 'create'])->name('sucursales.create');
+        Route::post('empresas/{tenant}/sucursales', [\App\Http\Controllers\Admin\SucursalController::class, 'store'])->name('sucursales.store');
+        Route::get('empresas/{tenant}/sucursales/{sucursal}/editar', [\App\Http\Controllers\Admin\SucursalController::class, 'edit'])->name('sucursales.edit');
+        Route::put('empresas/{tenant}/sucursales/{sucursal}', [\App\Http\Controllers\Admin\SucursalController::class, 'update'])->name('sucursales.update');
+        Route::delete('empresas/{tenant}/sucursales/{sucursal}', [\App\Http\Controllers\Admin\SucursalController::class, 'destroy'])->name('sucursales.destroy');
+
+        // Series anidadas por empresa
+        Route::get('empresas/{tenant}/series', [\App\Http\Controllers\Admin\SerieController::class, 'index'])->name('series.index');
+        Route::get('empresas/{tenant}/series/nueva', [\App\Http\Controllers\Admin\SerieController::class, 'create'])->name('series.create');
+        Route::post('empresas/{tenant}/series', [\App\Http\Controllers\Admin\SerieController::class, 'store'])->name('series.store');
+        Route::get('empresas/{tenant}/series/{serie}/editar', [\App\Http\Controllers\Admin\SerieController::class, 'edit'])->name('series.edit');
+        Route::put('empresas/{tenant}/series/{serie}', [\App\Http\Controllers\Admin\SerieController::class, 'update'])->name('series.update');
+        Route::delete('empresas/{tenant}/series/{serie}', [\App\Http\Controllers\Admin\SerieController::class, 'destroy'])->name('series.destroy');
+        Route::post('empresas/{tenant}/series/{serie}/toggle', [\App\Http\Controllers\Admin\SerieController::class, 'toggle'])->name('series.toggle');
+
+        // Comprobantes de la empresa (todos los tipos, unificados)
+        Route::get('logs-envios', [\App\Http\Controllers\Admin\EnvioLogController::class, 'index'])->name('logs-envios.index');
+        // Bitácora de acciones sensibles (auditoría S5)
+        Route::get('bitacora', [\App\Http\Controllers\Admin\BitacoraController::class, 'index'])->name('bitacora.index');
+        Route::get('empresas/{tenant}/comprobantes', [\App\Http\Controllers\Admin\EmpresaComprobanteController::class, 'index'])->name('empresas.comprobantes');
+        Route::get('empresas/{tenant}/comprobantes/{tipo}/{id}/respuesta', [\App\Http\Controllers\Admin\EmpresaComprobanteController::class, 'respuesta'])
+            ->where(['id' => '[0-9]+'])
+            ->name('empresas.comprobantes.respuesta');
+        Route::post('empresas/{tenant}/comprobantes/{tipo}/{id}/reenviar', [\App\Http\Controllers\Admin\EmpresaComprobanteController::class, 'reenviar'])
+            ->where(['id' => '[0-9]+'])->name('empresas.comprobantes.reenviar');
+        Route::post('empresas/{tenant}/comprobantes/{tipo}/{id}/anular', [\App\Http\Controllers\Admin\EmpresaComprobanteController::class, 'anular'])
+            ->where(['id' => '[0-9]+'])->name('empresas.comprobantes.anular');
+        Route::get('empresas/{tenant}/comprobantes/{tipo}/{id}/{formato}', [\App\Http\Controllers\Admin\EmpresaComprobanteController::class, 'download'])
+            ->where(['formato' => 'xml|cdr|pdf|anulacion-xml|anulacion-cdr', 'id' => '[0-9]+'])
+            ->name('empresas.comprobantes.download');
+
+        // Sucursales (listado global, cross-empresa)
+        Route::get('sucursales', [\App\Http\Controllers\Admin\SucursalGlobalController::class, 'index'])->name('sucursales.todas');
+
+        // Series (listado global, cross-empresa)
+        Route::get('series', [\App\Http\Controllers\Admin\SerieGlobalController::class, 'index'])->name('series.todas');
+
+        // Usuarios del panel (roles predefinidos) — solo super_admin y admin
+        Route::middleware('can:manage-users')->group(function () {
+            Route::get('usuarios', [\App\Http\Controllers\Admin\UserController::class, 'index'])->name('usuarios.index');
+            Route::get('usuarios/nuevo', [\App\Http\Controllers\Admin\UserController::class, 'create'])->name('usuarios.create');
+            Route::post('usuarios', [\App\Http\Controllers\Admin\UserController::class, 'store'])->name('usuarios.store');
+            Route::get('usuarios/{usuario}/editar', [\App\Http\Controllers\Admin\UserController::class, 'edit'])->name('usuarios.edit');
+            Route::put('usuarios/{usuario}', [\App\Http\Controllers\Admin\UserController::class, 'update'])->name('usuarios.update');
+            Route::post('usuarios/{usuario}/toggle', [\App\Http\Controllers\Admin\UserController::class, 'toggle'])->name('usuarios.toggle');
+            Route::delete('usuarios/{usuario}', [\App\Http\Controllers\Admin\UserController::class, 'destroy'])->name('usuarios.destroy');
+        });
+
+        // Planes
+        Route::get('planes', [\App\Http\Controllers\Admin\PlanController::class, 'index'])->name('planes.index');
+        Route::get('planes/nuevo', [\App\Http\Controllers\Admin\PlanController::class, 'create'])->name('planes.create');
+        Route::post('planes', [\App\Http\Controllers\Admin\PlanController::class, 'store'])->name('planes.store');
+        Route::get('planes/{plan}/editar', [\App\Http\Controllers\Admin\PlanController::class, 'edit'])->name('planes.edit');
+        Route::put('planes/{plan}', [\App\Http\Controllers\Admin\PlanController::class, 'update'])->name('planes.update');
+        Route::delete('planes/{plan}', [\App\Http\Controllers\Admin\PlanController::class, 'destroy'])->name('planes.destroy');
+        Route::post('planes/{plan}/toggle', [\App\Http\Controllers\Admin\PlanController::class, 'toggle'])->name('planes.toggle');
+
+        // Configuración global de emisión (switches ilimitado global / nuevas empresas)
+        Route::get('configuracion', [\App\Http\Controllers\Admin\ConfiguracionController::class, 'edit'])->name('configuracion');
+        Route::put('configuracion', [\App\Http\Controllers\Admin\ConfiguracionController::class, 'update'])->name('configuracion.update');
+        Route::put('configuracion/consulta-token', [\App\Http\Controllers\Admin\ConfiguracionController::class, 'updateConsultaToken'])->name('configuracion.consulta-token');
+        // Marca de la plataforma: logo (sidebar/login) + favicon (POST por ser multipart).
+        Route::post('configuracion/branding', [\App\Http\Controllers\Admin\ConfiguracionController::class, 'updateBranding'])->name('configuracion.branding');
+
+        // Consulta RUC/DNI (token global) para autocompletar al registrar empresas
+        Route::get('buscar-ruc', [\App\Http\Controllers\Admin\ConfiguracionController::class, 'lookupRuc'])->name('buscar-ruc');
+
+        // Licencia Pro: activar pegando credenciales desde el panel (antes solo CLI)
+        Route::get('licencia', [\App\Http\Controllers\Admin\LicenciaController::class, 'edit'])->name('licencia.edit');
+        Route::post('licencia/activar', [\App\Http\Controllers\Admin\LicenciaController::class, 'activar'])->name('licencia.activar');
+    });
+
+require __DIR__.'/settings.php';

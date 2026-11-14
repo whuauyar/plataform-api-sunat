@@ -1,0 +1,92 @@
+import { Link, usePage } from '@inertiajs/react';
+import { Activity, Building2, CreditCard, History, ListOrdered, LayoutGrid, MapPin, Settings2, ShieldCheck, Users } from '@/lib/icons';
+import AppLogo from '@/components/app-logo';
+import { NavMain } from '@/components/nav-main';
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarGroup,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from '@/components/ui/sidebar';
+import { useCurrentUrl } from '@/hooks/use-current-url';
+import { dashboard } from '@/routes';
+import type { NavItem } from '@/types';
+
+const mainNavItems: NavItem[] = [
+    {
+        title: 'Inicio',
+        href: dashboard(),
+        icon: LayoutGrid,
+    },
+];
+
+const PANEL_ROLES = ['super_admin', 'admin', 'soporte', 'lectura'];
+
+export function AppSidebar() {
+    const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { auth } = usePage<{ auth: { user: { is_admin?: boolean; role?: string } } }>().props;
+    const role = auth?.user?.role;
+    const isAdmin = auth?.user?.is_admin === true || (!!role && PANEL_ROLES.includes(role));
+    const canManageUsers = role === 'super_admin' || role === 'admin';
+
+    const adminNavItems: NavItem[] = [
+        { title: 'Logs de envíos', href: '/admin/logs-envios', icon: Activity },
+        { title: 'Empresas',   href: '/admin/empresas',   icon: Building2 },
+        { title: 'Sucursales', href: '/admin/sucursales', icon: MapPin },
+        { title: 'Series',     href: '/admin/series',     icon: ListOrdered },
+        { title: 'Planes',     href: '/admin/planes',     icon: CreditCard },
+        ...(canManageUsers ? [{ title: 'Usuarios', href: '/admin/usuarios', icon: Users }] : []),
+        ...(canManageUsers ? [{ title: 'Bitácora', href: '/admin/bitacora', icon: History }] : []),
+        ...(canManageUsers ? [{ title: 'Licencia', href: '/admin/licencia', icon: ShieldCheck }] : []),
+        { title: 'Configuración', href: '/admin/configuracion', icon: Settings2 },
+    ];
+
+    return (
+        <Sidebar collapsible="icon" variant="inset">
+            <SidebarHeader>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton size="lg" asChild className="h-auto py-2">
+                            <Link href={dashboard()} prefetch>
+                                <AppLogo />
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarHeader>
+
+            <SidebarContent>
+                <NavMain items={mainNavItems} />
+
+                {isAdmin && (
+                    <SidebarGroup className="px-2 py-0">
+                        <SidebarGroupLabel className="flex items-center gap-1.5">
+                            <ShieldCheck className="size-3" />
+                            Administración
+                        </SidebarGroupLabel>
+                        <SidebarMenu>
+                            {adminNavItems.map((item) => (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={isCurrentOrParentUrl(item.href)}
+                                        tooltip={{ children: item.title }}
+                                    >
+                                        <Link href={item.href} prefetch>
+                                            {item.icon && <item.icon />}
+                                            <span>{item.title}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroup>
+                )}
+            </SidebarContent>
+        </Sidebar>
+    );
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@jorge-chavez/api-sunat-sdk",
+  "version": "1.0.0",
+  "description": "SDK TypeScript para la API Jorge Chavez API SUNAT (facturación electrónica).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

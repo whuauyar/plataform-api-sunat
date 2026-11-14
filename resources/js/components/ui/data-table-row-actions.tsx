@@ -1,0 +1,68 @@
+import * as React from 'react';
+import { MoreHorizontal } from '@/lib/icons';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+
+export type RowAction = {
+    label: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    /** Color del ícono (clase Tailwind, ej. 'text-[#3599E6]'). */
+    iconClassName?: string;
+    onSelect: () => void;
+    /** Pinta el item en rojo (acciones destructivas). */
+    danger?: boolean;
+    /** Deshabilita el item. */
+    disabled?: boolean;
+    /** Inserta un separador antes de este item. */
+    separatorBefore?: boolean;
+};
+
+/**
+ * Menú de acciones por fila: un botón "⋮" que abre un dropdown con las
+ * acciones (ver, editar, activar, eliminar...). Ordenado y consistente en
+ * todas las tablas del admin.
+ */
+export function DataTableRowActions({ actions }: { actions: RowAction[] }) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8 data-[state=open]:bg-muted">
+                    <MoreHorizontal className="size-4" />
+                    <span className="sr-only">Acciones</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 border-0 shadow-lg">
+                <DropdownMenuLabel className="py-1 text-[11px] uppercase tracking-wide text-muted-foreground">Acciones</DropdownMenuLabel>
+                <DropdownMenuSeparator className="my-0.5" />
+                {actions.map((action, i) => (
+                    <React.Fragment key={i}>
+                        {action.separatorBefore && <DropdownMenuSeparator className="my-0.5" />}
+                        <DropdownMenuItem
+                            disabled={action.disabled}
+                            onSelect={(e) => {
+                                e.preventDefault();
+                                action.onSelect();
+                            }}
+                            className={cn(
+                                'py-1',
+                                action.danger &&
+                                    'text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400',
+                            )}
+                        >
+                            {action.icon && <action.icon className={cn('size-4', action.iconClassName)} />}
+                            {action.label}
+                        </DropdownMenuItem>
+                    </React.Fragment>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
