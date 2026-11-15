@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePage } from '@inertiajs/react';
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from '@/lib/icons';
 import type { FlashProps } from '@/types';
@@ -21,20 +21,35 @@ const COLORS = {
 
 export function FlashMessages() {
     const { flash } = usePage<{ flash: FlashProps }>().props;
-    const [messages, setMessages] = useState<Message[]>([]);
 
-    useEffect(() => {
+    // Mismo comportamiento que la versión original, sin setState dentro del effect:
+    // - Un flash CON mensajes los muestra y programa su cierre a los 6 s.
+    // - Un flash SIN mensajes no borra lo que está en pantalla (se conservan los
+    //   últimos mensajes mostrados), igual que antes.
+    // - Si llega otro flash antes de los 6 s, el cierre programado se cancela.
+    const nuevos = useMemo<Message[]>(() => {
         const msgs: Message[] = [];
         if (flash?.success) msgs.push({ type: 'success', text: flash.success });
         if (flash?.error)   msgs.push({ type: 'error',   text: flash.error });
         if (flash?.info)    msgs.push({ type: 'info',     text: flash.info });
         if (flash?.warning) msgs.push({ type: 'warning',  text: flash.warning });
-        if (msgs.length) {
-            setMessages(msgs);
-            const t = setTimeout(() => setMessages([]), 6000);
-            return () => clearTimeout(t);
-        }
+        return msgs;
     }, [flash]);
+
+    // Ajuste de estado cuando cambian las props (patrón recomendado por React):
+    // solo un flash con mensajes reemplaza lo mostrado.
+    const [flashPrevio, setFlashPrevio] = useState<FlashProps | undefined>(undefined);
+    const [messages, setMessages] = useState<Message[]>([]);
+    if (flash !== flashPrevio) {
+        setFlashPrevio(flash);
+        if (nuevos.length) setMessages(nuevos);
+    }
+
+    useEffect(() => {
+        if (!nuevos.length) return;
+        const t = setTimeout(() => setMessages([]), 6000);
+        return () => clearTimeout(t);
+    }, [flash, nuevos]);
 
     if (!messages.length) return null;
 

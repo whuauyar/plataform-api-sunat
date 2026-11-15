@@ -91,7 +91,7 @@ function fmt(n: number) {
     return new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(n);
 }
 
-export default function NuevaNotaCredito({ motivos, series, doc_original, tenant, post_url = '/sunat/nota-credito', editar }: Props) {
+export default function NuevaNotaCredito({ motivos, series, doc_original, post_url = '/sunat/nota-credito', editar }: Props) {
     const editando = !!editar;
 
     // En edición, el "documento afectado" se reconstruye desde la nota rechazada.

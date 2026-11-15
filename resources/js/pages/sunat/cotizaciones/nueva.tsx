@@ -19,7 +19,7 @@ type Props = {
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
-export default function NuevaCotizacion({ tenant, clientes }: Props) {
+export default function NuevaCotizacion({ tenant }: Props) {
 
     const [fecha, setFecha]               = useState(new Date().toISOString().split('T')[0]);
     const [fechaVenc, setFechaVenc]        = useState('');
