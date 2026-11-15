@@ -15,7 +15,8 @@ import process from 'node:process';
 import newman from 'newman';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8000/api/v1';
-const DELAY_MS = Number(process.env.DELAY_MS || 300);
+// La API limita a 120 req/min por empresa en plan pro: 700 ms entre requests deja margen.
+const DELAY_MS = Number(process.env.DELAY_MS || 700);
 
 function rucValido() {
   const base = '20' + String(Math.floor(Math.random() * 1e8)).padStart(8, '0');
@@ -74,7 +75,8 @@ col.event = [{
   listen: 'test',
   script: { type: 'text/javascript', exec: [
     "let j = null; try { j = pm.response.json(); } catch (e) {}",
-    "const d = j && (j.data !== undefined ? j.data : j);",
+    "// La API responde { estado, mensaje, datos }; se aceptan también data o la raíz.",
+    "const d = j && (j.datos !== undefined ? j.datos : (j.data !== undefined ? j.data : j));",
     "const url = pm.request.url.getPath();",
     "const m = pm.request.method;",
     "if (d && d.api_key && d.api_secret) { pm.collectionVariables.set('api_key', d.api_key); pm.collectionVariables.set('api_secret', d.api_secret); }",
