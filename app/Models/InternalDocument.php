@@ -134,7 +134,10 @@ class InternalDocument extends Model implements Documentable
         $last = static::where('tenant_id', $tenantId)
             ->where('type', $type)
             ->where('numero', 'like', "{$pattern}%")
-            ->orderByRaw('CAST(SUBSTRING(numero, ' . (strlen($pattern) + 1) . ') AS UNSIGNED) DESC')
+            ->orderByRaw(static::expresionOrdenNumerico(
+                (new static)->getConnection()->getDriverName(),
+                strlen($pattern) + 1,
+            ) . ' DESC')
             ->lockForUpdate()
             ->value('numero');
 
@@ -146,5 +149,29 @@ class InternalDocument extends Model implements Documentable
         }
 
         return $prefix . '-' . $yearMonth . '-' . str_pad($next, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Expresión SQL que extrae el correlativo numérico de `numero` a partir de la
+     * posición $desde (1-based) para ordenar de forma numérica.
+     *
+     * Cada motor tiene su propia sintaxis de CAST: `UNSIGNED` solo existe en
+     * MySQL/MariaDB y en PostgreSQL provoca "type unsigned does not exist", lo que
+     * impedía crear cotizaciones y notas de venta. En MySQL la expresión es la misma
+     * que antes, así que su comportamiento no cambia.
+     */
+    public static function expresionOrdenNumerico(string $driver, int $desde): string
+    {
+        if ($desde < 1) {
+            throw new \InvalidArgumentException('La posición inicial debe ser mayor o igual a 1.');
+        }
+
+        return match ($driver) {
+            'pgsql' => "CAST(SUBSTRING(numero FROM {$desde}) AS BIGINT)",
+            'sqlite' => "CAST(SUBSTR(numero, {$desde}) AS INTEGER)",
+            'sqlsrv' => "CAST(SUBSTRING(numero, {$desde}, 30) AS BIGINT)",
+            // mysql, mariadb y cualquier otro: la expresión original del proyecto base.
+            default => "CAST(SUBSTRING(numero, {$desde}) AS UNSIGNED)",
+        };
     }
 }
