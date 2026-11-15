@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Copy, Download, Infinity as InfinityIcon, KeyRound, MoreVertical, Pencil, Power, Store, Trash2 } from '@/lib/icons';
 import AppLayout from '@/layouts/app-layout';
 import { ConfettiBurst } from '@/components/ui/confetti-burst';
@@ -79,21 +79,20 @@ export default function EmpresasShow({ tenant, credencialesNuevas }: Props) {
     // credenciales (cada vez que llega credencialesNuevas). Se resetea con onDone
     // para poder volver a dispararlo.
     const flash = usePage<{ flash?: { empresa_creada?: boolean } }>().props.flash;
-    const [celebrar, setCelebrar] = useState<boolean>(Boolean(flash?.empresa_creada || credencialesNuevas));
+    const [celebrar, setCelebrar] = useState(false);
+    useEffect(() => {
+        if (flash?.empresa_creada) setCelebrar(true);
+    }, [flash?.empresa_creada]);
 
     // Abrir el modal cada vez que Inertia entrega credencialesNuevas
-    // (POST /regenerar-credenciales redirige al mismo show sin remontar, así
-    // useState no se reinicializa). Se detecta el cambio de props durante el
-    // render, patrón recomendado por React en lugar de setState dentro de useEffect.
-    const [previo, setPrevio] = useState({ cred: credencialesNuevas, creada: flash?.empresa_creada });
-    if (previo.cred !== credencialesNuevas || previo.creada !== flash?.empresa_creada) {
-        setPrevio({ cred: credencialesNuevas, creada: flash?.empresa_creada });
-        if (credencialesNuevas && credencialesNuevas !== previo.cred) {
+    // (POST /regenerar-credenciales redirige al mismo show sin remontar,
+    // así useState no reactualiza — hay que forzarlo con useEffect).
+    useEffect(() => {
+        if (credencialesNuevas) {
             setCredOpen(true);
             setCelebrar(true);
         }
-        if (flash?.empresa_creada && !previo.creada) setCelebrar(true);
-    }
+    }, [credencialesNuevas]);
 
     // Al cerrar el modal de credenciales: si la empresa se ACABA de crear
     // (empresa_creada), continúa el alta guiada llevando a crear la primera

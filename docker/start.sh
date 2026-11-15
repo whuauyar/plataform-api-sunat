@@ -33,4 +33,4 @@ echo "==> Iniciando servidor..."
 # (requiere ext-pcntl) maneja peticiones concurrentes y evita los 502 de nginx
 # cuando el panel carga HTML + assets + XHR a la vez.
 export PHP_CLI_SERVER_WORKERS="${PHP_CLI_SERVER_WORKERS:-10}"
-exec php artisan serve --host=0.0.0.0 --port="${PORT:-8000}" --no-reload
+exec php artisan serve --host=0.0.0.0 --port="${PORT:-8000}"

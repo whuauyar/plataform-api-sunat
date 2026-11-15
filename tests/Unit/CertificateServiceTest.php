@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Services\CertificateService;
-use Tests\TestCase;
+use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
@@ -17,9 +17,6 @@ use RuntimeException;
  * key". Para entonces ya había boletas emitidas que nunca llegaron a SUNAT y
  * un plazo de 7 días corriendo.
  */
-// Extiende Tests\TestCase (Laravel) y no PHPUnit puro: la ruta de "password
-// equivocado" registra un Log::warning, y sin la aplicación arrancada el facade
-// Log lanza "A facade root has not been set" en vez de la RuntimeException esperada.
 class CertificateServiceTest extends TestCase
 {
     /** @return array{0: string, 1: string} [pem completo, solo certificado] */

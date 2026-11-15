@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, type LucideIcon } from '@/lib/icons';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -52,10 +52,11 @@ function prefersReducedMotion(): boolean {
 
 /** Anima un número de 0 → target al montar (ease-out). Respeta reduce-motion. */
 export function useCountUp(target: number, duration = 850): number {
-    const reducir = prefersReducedMotion();
-    const [value, setValue] = useState(reducir ? target : 0);
+    const [value, setValue] = useState(prefersReducedMotion() ? target : 0);
+    const ref = useRef(target);
+    ref.current = target;
     useEffect(() => {
-        if (reducir) return;
+        if (prefersReducedMotion()) { setValue(target); return; }
         let raf = 0;
         const start = performance.now();
         const from = 0;
@@ -68,9 +69,8 @@ export function useCountUp(target: number, duration = 850): number {
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-    }, [target, duration, reducir]);
-    // Con reduce-motion se muestra el valor final sin animar (sin setState en el effect).
-    return reducir ? target : value;
+    }, [target, duration]);
+    return value;
 }
 
 // ── Formatters ──────────────────────────────────────────────────────────────

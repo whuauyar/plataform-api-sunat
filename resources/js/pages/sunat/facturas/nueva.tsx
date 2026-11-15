@@ -138,7 +138,7 @@ function repartirMontos(total: number, n: number): number[] {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function NuevaFactura({ tenant, series_factura, series_boleta, tipo_inicial, cotizacion, lock_tipo = false, post_url = '/sunat/facturas', editar }: Props) {
+export default function NuevaFactura({ tenant, series_factura, series_boleta, clientes, tipo_inicial, cotizacion, lock_tipo = false, post_url = '/sunat/facturas', editar }: Props) {
 
     const editando = !!editar;
 

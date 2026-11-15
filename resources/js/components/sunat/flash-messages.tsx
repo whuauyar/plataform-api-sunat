@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePage } from '@inertiajs/react';
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from '@/lib/icons';
 import type { FlashProps } from '@/types';
@@ -21,44 +21,33 @@ const COLORS = {
 
 export function FlashMessages() {
     const { flash } = usePage<{ flash: FlashProps }>().props;
+    const [messages, setMessages] = useState<Message[]>([]);
 
-    // Los mensajes se derivan del flash actual; el estado solo recuerda cuáles
-    // se ocultaron PARA ESE flash. Un flash nuevo (otra visita) los vuelve a mostrar.
-    const todos = useMemo<Message[]>(() => {
+    useEffect(() => {
         const msgs: Message[] = [];
         if (flash?.success) msgs.push({ type: 'success', text: flash.success });
         if (flash?.error)   msgs.push({ type: 'error',   text: flash.error });
         if (flash?.info)    msgs.push({ type: 'info',     text: flash.info });
         if (flash?.warning) msgs.push({ type: 'warning',  text: flash.warning });
-        return msgs;
+        if (msgs.length) {
+            setMessages(msgs);
+            const t = setTimeout(() => setMessages([]), 6000);
+            return () => clearTimeout(t);
+        }
     }, [flash]);
-
-    const [ocultos, setOcultos] = useState<{ origen: FlashProps | undefined; idx: number[] }>({ origen: undefined, idx: [] });
-    const idxOcultos = ocultos.origen === flash ? ocultos.idx : [];
-
-    useEffect(() => {
-        if (!todos.length) return;
-        const t = setTimeout(() => setOcultos({ origen: flash, idx: todos.map((_, i) => i) }), 6000);
-        return () => clearTimeout(t);
-    }, [flash, todos]);
-
-    const ocultar = (i: number) =>
-        setOcultos(prev => ({ origen: flash, idx: [...(prev.origen === flash ? prev.idx : []), i] }));
-
-    const messages = todos.map((msg, i) => ({ ...msg, i })).filter(m => !idxOcultos.includes(m.i));
 
     if (!messages.length) return null;
 
     return (
         <div className="fixed right-4 top-4 z-50 flex flex-col gap-2">
-            {messages.map((msg) => {
+            {messages.map((msg, i) => {
                 const Icon = ICONS[msg.type];
                 return (
-                    <div key={msg.i} className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-md max-w-sm ${COLORS[msg.type]}`}>
+                    <div key={i} className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-md max-w-sm ${COLORS[msg.type]}`}>
                         <Icon className="mt-0.5 size-4 shrink-0" />
                         <p className="text-sm font-medium">{msg.text}</p>
                         <button
-                            onClick={() => ocultar(msg.i)}
+                            onClick={() => setMessages(m => m.filter((_, j) => j !== i))}
                             className="ml-auto shrink-0 opacity-60 hover:opacity-100"
                         >
                             <X className="size-3.5" />

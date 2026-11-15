@@ -92,7 +92,7 @@ function fmt(n: number) {
     return new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(n);
 }
 
-export default function NuevaNotaDebito({ motivos, series, doc_original, post_url = '/sunat/nota-debito', editar }: Props) {
+export default function NuevaNotaDebito({ motivos, series, doc_original, tenant, post_url = '/sunat/nota-debito', editar }: Props) {
     const editando = !!editar;
     const docEditado: DocOriginal | null = editar
         ? {

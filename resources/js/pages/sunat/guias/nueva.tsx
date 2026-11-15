@@ -116,7 +116,7 @@ export default function NuevaGuia({ tenant, series_remitente, series_transportis
     const [serie, setSerie] = useState(editar?.serie ?? series[0]?.serie ?? '');
     const [fechaEmision, setFechaEmision] = useState(editar?.fecha_emision ?? new Date().toISOString().split('T')[0]);
     const [fechaTraslado, setFechaTraslado] = useState(editar?.fecha_traslado ?? new Date().toISOString().split('T')[0]);
-    const [observacion] = useState(editar?.observacion ?? '');
+    const [observacion, setObservacion] = useState(editar?.observacion ?? '');
 
     const [codTraslado, setCodTraslado] = useState(editar?.cod_traslado ?? '01');
     const [modTraslado, setModTraslado] = useState<'01' | '02'>(editar?.mod_traslado ?? '02');
